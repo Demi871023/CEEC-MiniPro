@@ -16,7 +16,7 @@
   * 科目的回答
     * 改變回答的方式。
     * 原本的選項有困難度上的差異，可以用級距分成 5、10、15、20 分
-    * 如果以吃某個掉落物（加分）的方式來收集分數去做選擇，如果吃到炸彈就結束。回答完成就得到行為經驗值
+    * 如果以吃某個掉落物（加分）的方式來收集分數去做選擇，如果吃到炸彈就結束（見圖二）。回答完成就得到行為經驗值。
 
 
 
@@ -29,4 +29,7 @@
 
 
 > 圖一
-> <img src="https://img1.6949.com/litimg/20140527161/1-F01010P000K9.jpg">
+<img src="https://img1.6949.com/litimg/20140527161/1-F01010P000K9.jpg">
+
+> 圖二
+<img src="https://lh3.googleusercontent.com/proxy/H44p8eAvHLsSpd8xbqTgXUqBmNxqDKaYFNleLsImgWiR5B3BCRmDYk1anqrwxU51eSt_hVv5hNPGlUM7nuGUBOS7mGmKNdLpkJX-30v7eK-ZDvOsgki-rOIZ2A">
