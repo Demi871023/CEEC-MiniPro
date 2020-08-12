@@ -28,8 +28,6 @@
 > 圖一
 <img src="https://img1.6949.com/litimg/20140527161/1-F01010P000K9.jpg">
 
-> 圖二
-<img src="https://lh3.googleusercontent.com/proxy/H44p8eAvHLsSpd8xbqTgXUqBmNxqDKaYFNleLsImgWiR5B3BCRmDYk1anqrwxU51eSt_hVv5hNPGlUM7nuGUBOS7mGmKNdLpkJX-30v7eK-ZDvOsgki-rOIZ2A">
 
 
 
