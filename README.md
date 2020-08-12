@@ -1,5 +1,8 @@
 # CEEC-MiniPro
 
+> [Reference](https://jsfiddle.net/v4yx5ba0/416/)
+
+
 ## 遊戲架構
 主要分成四大部分：高一、高二、高三
 
