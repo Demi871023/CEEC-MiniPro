@@ -36,9 +36,21 @@
 ## 可能遇到問題
 * 點點之間的繪圖距離可能要做調整
 * Bonus 可能可以結合機會命運(?)
+* [解決 AJAX 沒辦法取得 CORS（跨網域存取）資料的問題](https://noob.tw/js-cors/)
 
 
+## Phaser
+> * [CDN 連結](https://phaser.io/download/stable)
 
-## 8/11 - 8/13
-進入系統與角色選取
+## BootStrap
+> * [BootStrap 官方 CDN 連結](https://www.bootstrapcdn.com/)
+
+## 圖片連結
+> * [圖片網址 IMGUR](https://imgur.com/a/O26iMVC)
+
+## 網站佈署
+> * [Heroku]
+> * [Loopback 127.0.0.1](http://jdev.asika.tw/getting-started/create-web-server-in-my-computer.html)
+
+
 
