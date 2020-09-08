@@ -76,6 +76,8 @@
 
 ## BootStrap
 > * [BootStrap 官方 CDN 連結](https://www.bootstrapcdn.com/)
+> * [RWD](https://cythilya.github.io/2015/04/07/bootstrap-grid-system/)
+> * [RWD2](https://medium.com/@realdennis/40%E8%A1%8C%E5%AF%A6%E4%BD%9C%E9%9F%BF%E6%87%89%E5%BC%8F%E7%9A%84%E4%BD%88%E5%B1%80%E7%B3%BB%E7%B5%B1-%E5%91%8A%E8%A8%B4%E4%BD%A0col-sm-12-col-md-6-%E6%98%AF%E5%A6%82%E4%BD%95%E5%AF%A6%E7%8F%BE-4490a65b1a0)
 
 ## 圖片連結
 > * [圖片網址 IMGUR](https://imgur.com/a/O26iMVC)
