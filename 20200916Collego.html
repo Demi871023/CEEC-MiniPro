@@ -1,0 +1,1272 @@
+@{
+    Layout = "~/Views/Shared/_LayoutHighschool.cshtml";
+    ViewBag.Title = "選才育才輔助系統-" + ViewBag.current_college_name +"學群";
+}
+@using University_Survey.Models;
+@model University_Survey.Models.ViewModels.CollegeInfoViewModels
+<html>
+<head>
+    <script>
+        $(document).ready(function () {
+            $('[data-toggle="tooltip"]').tooltip();
+            $('.question').tooltip({ title: "此圖顯示學群中各學類間相似的程度，距離越遠越不相似；距離越近，越相似。", placement: "right" });
+        });
+    </script>
+    <style>
+        /*header {
+            padding-top: 60px;
+        }*/
+
+
+        html, body {
+            max-width: 100%;
+            overflow-x: hidden;
+        }       
+
+        #selected {
+            background-color: #489FDC;
+        }
+
+            #selected a {
+                color: azure;
+            }
+
+        @@media ( min-width: 768px ) {
+            .grid-divider {
+                position: relative;
+                padding: 0;
+            }
+
+                .grid-divider > [class*='col-'] {
+                    position: static;
+                }
+
+                    .grid-divider > [class*='col-']:nth-child(n+2):before {
+                        content: "";
+                        border-left: 1px solid #DDD;
+                        position: absolute;
+                        top: 0;
+                        bottom: 0;
+                    }
+
+            .col-padding {
+                padding: 0 15px;
+            }
+        }
+
+        .progress {
+            position: relative;
+            height: 25px;
+        }
+
+            .progress > .progress-type {
+                position: absolute;
+                left: 0px;
+                font-weight: 800;
+                padding: 3px 30px 2px 10px;
+                color: rgb(255, 255, 255);
+                background-color: rgba(25, 25, 25, 0.2);
+            }
+
+            .progress > .progress-completed {
+                position: absolute;
+                right: 0px;
+                font-weight: 800;
+                padding: 3px 10px 2px;
+            }
+        /* css for course tree	*/
+        .tree, .tree ul {
+            margin: 0 0 0 1em; /* indentation */
+            padding: 0;
+            list-style: none;
+            color: #369;
+            position: relative;
+        }
+
+            .tree ul {
+                margin-left: .5em
+            }
+                /* (indentation/2) */
+                .tree:before, .tree ul:before {
+                    content: "";
+                    display: block;
+                    width: 0;
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    left: 0;
+                    border-left: 1px solid;
+                }
+
+            .tree li {
+                margin: 0;
+                padding: 0 1.5em; /* indentation + .5em */
+                line-height: 2em; /* default list item's `line-height` */
+                font-weight: bold;
+                position: relative;
+            }
+
+                .tree li:before {
+                    content: "";
+                    display: block;
+                    width: 10px; /* same with indentation */
+                    height: 0;
+                    border-top: 1px solid;
+                    margin-top: -1px; /* border top width */
+                    position: absolute;
+                    top: 1em; /* (line-height/2) */
+                    left: 0;
+                }
+
+                .tree li:last-child:before {
+                    background: white; /* same with body background */
+                    height: auto;
+                    top: 1em; /* (line-height/2) */
+                    bottom: 0;
+                }        
+    
+    </style>
+
+    <link rel="stylesheet" href="~/Content/style.min.css" />
+    @* 核心素養 chart.js *@
+    <script src="~/Scripts/Chart.bundle.min.js"></script>
+    <script src="~/Scripts/utils.js"></script>
+    <style>
+        canvas {
+            -moz-user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+        }
+    </style>
+    @* 核心素養 *@
+    <script>
+        $(document).ready(function(){
+            if($(window).width() < 768)
+                $('html,body').animate({scrollTop:$('#main').offset().top-80}, 400);
+        });
+    </script>
+</head>
+<body>
+    <!-- 主要內容之div區塊 ，設定左邊距60px ，務必保留此div否則內容會有一部分被sidebar吃掉-->
+    <div class="main">
+        <div class="container">
+    <!--------------------------------- 左側學類分類欄--------------------->
+    <div class="col-xs-12 col-sm-3" style="padding-bottom:40px">        
+            @foreach (var college in Model.collegeList)
+            {
+                <a href="@Url.Action("CollegeIntro", "Highschool", new { current_college_id = college.college_id })" class="col-xs-6 col-sm-12 col-md-6" style="margin-bottom:30px;">
+                    <img src="../Content/img/collegelist/@(college.college_id).png" alt="@college.college_name" />
+                    <label class="section__content-label" style="margin-bottom: 20px; font-size: 14px; height: auto; width: auto; line-height: inherit;">@college.college_name @if (college.college_id != 19)
+                    {<span>學群</span>}</label>
+                </a>                
+            }        
+    </div>
+    <!--------------------------------- 右側主要內容 ----------------------------->
+    @if (ViewBag.current_college.college_id != 19)
+            {
+        <div id="main" class="col-xs-12 col-sm-9">
+            @*<p style="color:red">以下各項學群資料僅為現階段學系調查問卷所收集之初步資料，樣本數不足，且資料仍在持續更新中，僅供校系填答問卷及修正資料參考，請勿引用或外傳。</p>*@
+            <nobr><b style="font-size:22pt">@ViewBag.current_college_name 學群</b></nobr>
+            <nobr style="display: inline-flex;">
+                <a href="javascript:void(0);" onclick="addToCompare(@ViewBag.current_college.college_id,0)" style="padding-left:15px;">
+                    <img src="../Content/img/add.png" style="position:relative;width:18px; vertical-align: baseline;" />加入比較清單
+                </a>
+                @{
+                        CurrentUserInfo _currentUser = CurrentUserInfo.GetCurrentUserInfo();
+                }
+                @if (_currentUser != null && _currentUser.UserLevel == "8")
+                    {
+                    <link rel="stylesheet" href="~/Content/addFavorite.css" />
+                    <script src="~/Scripts/addFavorite.js" type="text/javascript"></script>
+                    <div class="clickFavorite" data-id="@ViewBag.current_college.college_id" data-type="1">
+                        @if (ViewBag.favorite == true)
+                            {
+                            <span class="fa fa-heart" style="font-family: fontawesome; font-size: inherit;" onclick="addToFavorite(this,@ViewBag.current_college.college_id,1)"></span>
+                            }
+                            else
+                            {
+                            <span class="fa fa-heart-o" style="font-family: fontawesome; font-size: inherit;" onclick="addToFavorite(this,@ViewBag.current_college.college_id,1)"></span>
+                            }
+                        <div class="ring"></div>
+                        <div class="ring2"></div>
+                        <div class="FavoriteInfo">加入最愛成功</div>
+                    </div>
+                    }
+            </nobr>
+
+            <p>
+                相關學群：
+                @foreach (var college in Model.collegeRelationList)
+                    {
+                    <a style="color:black" target="_blank" href="@Url.Action("CollegeIntro", "Highschool", new { current_college_id = college.college.college_id })"><u>@college.college.college_name</u></a>
+                    }
+            </p>
+            <div class="col-xs-12">
+                <p style="float:right;">資料上架時間：@ViewBag.current_college.edit_time</p>
+            </div>
+            
+            <br>
+
+            @*簡要介紹*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">簡要介紹</span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    <p style="font-size:1.3em">@MvcHtmlString.Create(ViewBag.current_college.college_introduce.Replace("\r\n", "<br />").Replace("\r", "<br />").Replace("\n", "<br />").Replace("\t", "<br />"))</p>
+                    @*<article style="font-size:1.3em">@ViewBag.current_college.college_introduce</article>*@
+                </dd>
+            </dl>
+
+            @*學習內容*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            學習內容
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    <article style="font-size:1.3em">@ViewBag.current_college.college_learning_content</article>
+                </dd>
+            </dl>
+
+
+            @*主要學類*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            主要學類
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    @foreach (var major in Model.relationList)
+                        {
+                        <a style="font-size:1.3em ; color:black " target="_blank" href="@Url.Action("MajorIntro", "Highschool", new { current_major_id = major.major_id, current_college_id = ViewBag.current_college.college_id })"><u>@major.major.major_name &nbsp;</u></a>
+                        }
+                </dd>
+            </dl>
+
+
+            @*興趣類型*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            興趣類型
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    @foreach (var interest in Model.interestList)
+                        {
+                        <a style="font-size:1.3em ; color:black" data-toggle="tooltip" target="_blank" href="~/Learningplan/interest?interest=@interest.Interest_id" title="@interest.interest.introduce"><u>@interest.interest.name&nbsp;</u></a>
+                        }
+                </dd>
+            </dl>
+
+            @*知識領域*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            知識領域
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    @foreach (var knowledge in Model.knowledgeList)
+                        {
+                        <a style="font-size:1.3em ; color:black" data-toggle="tooltip" title="@knowledge.knowledge.introduce" href='@Url.Action("knowledgelist", "Learningplan", new { current_knowledge_id = @knowledge.knowledge.id })'><u>@knowledge.knowledge.name&nbsp;</u></a>
+                        }
+                </dd>
+            </dl>
+
+
+            @*核心素養*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            核心素養
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    <div id="canvas-holder" style="width:450px; height:630px">
+                        <canvas id="chart-area" style="width:450px; height:630px"></canvas>
+                    </div>
+                    <p style="color:#337ab7">圖表來源為學群內各校系之重視百分比的平均值，加總為100%；百分比越高，代表越重視。</p>
+                </dd>
+            </dl>
+
+            @*重要學科*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            重要學科
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    @foreach (var domain in Model.domainList)
+                        {
+                        <nobr style="font-size:1.3em ;">@domain.high_school_domain.minor_domain_name &nbsp;</nobr>
+                        }
+                </dd>
+            </dl>
+
+            @*加深加廣*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            加深加廣
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    @foreach (var extra_course in Model.extra_courseList)
+                        {
+                        <nobr style="font-size:1.3em ;">@extra_course.high_school_extra_course.course_name &nbsp;</nobr>
+                        }
+                </dd>
+            </dl>
+
+
+            @*多元能力*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2 ">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            多元能力
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12  col-md-10 ">
+                    @foreach (var ability in Model.abilityList)
+                        {
+                        <nobr>
+                            <a style="font-size:1.3em ; color:black" data-toggle="tooltip" title="@ability.multiple_ability.ability_desc"><u>@ability.multiple_ability.ability_name &nbsp;</u></a>
+                        </nobr>
+
+                        }
+                </dd>
+            </dl>
+
+
+            @*個人特質*@
+            <dl class="row">
+                <dt class="col-xs-12 col-md-2">
+                    <span style="font-size:1.3em">
+                        <strong>
+                            個人特質
+                        </strong>
+                    </span>
+                </dt>
+                <dd class="col-xs-12 col-md-10 ">
+                    @foreach (var personality in Model.personalityList)
+                        {
+                        <nobr>
+                            <a style="font-size:1.3em ; color:black" data-toggle="tooltip" title="@personality.personality.minor_personality_name.Split('：')[1]"><u>@personality.personality.minor_personality_name.Split('：')[0] &nbsp;</u></a>
+                        </nobr>
+                        }
+                </dd>
+            </dl>
+
+            @*生涯發展*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em"><strong> 生涯發展 </strong></span>
+                </dt>
+                <dd class="col-xs-12 col-md-10 ">
+                    @if (Model.jobgroupList.Count > 0)
+                        {
+                            foreach (var job in Model.jobgroupList)
+                            {
+
+                        <nobr style="font-size:1.3em"> @job.job_major_group.major_groups_name &nbsp;</nobr>
+
+                            }
+                        }
+                        else
+                        {
+                        <nobr>資料整理中</nobr>
+                        }
+                </dd>
+            </dl>
+            @*升學參考*@
+            <dl class="row">
+                <dt class="col-xs-12  col-md-2">
+                    <span style="font-size:1.3em"><strong> 選才方向 </strong></span>    
+                </dt>
+                <dd class="col-xs-12 col-md-10 ">
+                    <div class="col-xs-12">
+                        <h5 style="padding-left:15px;padding-right:15px;">選才方向資料依據招聯會公告整理呈現，若有誤植或未及更新時，以招聯會公告為準。</h5>
+                        <h5 style="padding-left:15px;padding-right:15px;">選才方向僅為校系建議高中學生學習或生涯規劃之參考，校系選才標準與條件以當年度招生簡章校系分則之規範為準。</h5>
+                        <h5 style="padding-left:15px;padding-right:15px; font-weight:bolder; color: #09caa6;">學群內之各系選才指標仍有差異，若想了解特定科系資料，請點選至學類的【對應校系】頁面進一步查詢。</h5>
+                        <h5 style="padding-left:15px;padding-right:15px; font-weight:bolder; color: #09caa6;">申請入學第二階段甄試過程之學習準備建議方向，並非指學生必須具備所有項次之學習歷程。若學生提供其他有利審查之資料，學系仍會以學生所提供之資料，據以綜合評量。</h5>                        
+                        
+                        <p style="font-size:1.3em;color:#0aa7b4;">申請入學</p>
+                        <p style="font-size:1.3em;color: #ffa996;">學習準備建議方向 - 111修課紀錄參考之領域</p>
+                    </div>
+                    @if (ViewBag.current_college.college_apply_domain.Count > 0)
+                    {
+                        Dictionary<string, string> typename = new Dictionary<string, string>()
+                                            {
+                                                { "1","語文領域"}, { "2","數學領域"}, { "3","自然科學領域"}, { "4","社會領域"}, { "5","藝術領域，或藝術才能班及藝術才能資優班之藝術才能專長領域"}, { "6","科技領域" }, { "7","綜合活動領域" }, { "8","健康與體育領域，或體育班之體育專業科目"}, { "9","無參考領域" }
+                                            };
+                        Dictionary<string, string> radarname = new Dictionary<string, string>()
+                                            {
+                                                { "1","語文領域"}, { "2","數學領域"}, { "3","自然科學領域"}, { "4","社會領域"}, { "5","藝術領域"}, { "6","科技領域" }, { "7","綜合活動領域" }, { "8","健康與體育領域"}, { "9","無參考領域" }
+                                            };
+                        <!--  申入 領域  圖示-->
+                        <div id="apply-domain" class="col-xs-12 col-md-6">
+                            <canvas id="apply-domain-area"></canvas>
+                        </div>
+                        var addata = "";
+                        var adlabels = "";
+                        var adr_data = "";
+                        List<V_apply> V_applylist = ViewBag.V_apply;
+                    <div class="col-xs-12 col-md-6">
+                        @foreach (var apply_d in ViewBag.current_college.college_apply_domain)
+                        {
+                            addata += @apply_d.importance + ",";
+                            adlabels += @radarname[apply_d.domain.ToString()] + ",";
+                            adr_data += @apply_d.importance + "%(" + @apply_d.times + "),";
+                        <button data-toggle="modal" data-target="#domain-@apply_d.domain" style="font-size:1.3em;border-radius: 40px; color: white; white-space: normal; background-color: #6bd1d9; padding: 1px 8px; margin-bottom: 5px;" class="btn">@String.Format("{0:00.00}", @apply_d.importance)%</button>
+                        <span style="font-size:1.3em">@typename[apply_d.domain.ToString()]</span>
+                        <br />
+                        <!--學系顯示框架-->
+                        <div class="modal fade" id="domain-@apply_d.domain" style="text-align: center; font-size: 16px; top:15%" tabindex="-1" role="dialog" aria-labelledby="domain-@apply_d.domain" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h3 class="modal-title">
+                                            申請入學 111修課紀錄參考 @typename[apply_d.domain.ToString()]
+                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                <span aria-hidden="true"><i class="fa fa-times"></i></span>
+                                            </button>
+                                        </h3>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p style="text-align: right;">共 @apply_d.times 校系組</p>
+                                        @foreach (var V_apply in V_applylist.Where(x => x.p_domain_1 == @apply_d.domain || x.p_domain_2 == @apply_d.domain || x.p_domain_3 == @apply_d.domain || x.p_domain_4 == @apply_d.domain || x.p_domain_5 == @apply_d.domain).OrderBy(x => x.school_id))
+                                            {
+                                            <p>
+                                                @V_apply.school_name                                                
+                                                @if (V_apply.hidden || V_apply.confirmed_time == null)
+                                                { @V_apply.dept_name}
+                                                else
+                                                { <a href="/Highschool/DepartmentIntro?dept_id=@V_apply.dept_id" target="_blank"> @V_apply.dept_name</a>}
+                                                (@V_apply.edu_dept_name)
+                                            </p>
+                                            }
+                                    </div>
+                                    <div class="modal-footer" style="border-top:none">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!--學系顯示框架 End -->
+                        }
+                        <a id="A-domain-data" style="display:none;">@addata.Substring(0, (@addata.Length) - 1)</a>
+                        <a id="A-domain-labels" style="display:none;">@adlabels.Substring(0, (@adlabels.Length) - 1)</a>
+                        <a id="A-domain-rdata" style="display:none;">@adr_data.Substring(0, (@adr_data.Length) - 1)</a>
+                    </div>
+                    }
+                    <br /><br />
+
+                    <div class="col-xs-12">
+                        <p style="font-size:1.3em;color:#0aa7b4;">申請入學</p>
+                        <p style="font-size:1.3em;color: #ffa996;">111學測數學參採比例</p>
+                    </div>
+                    @if (ViewBag.current_college.college_apply.Count > 0)
+                    {
+                        Dictionary<string, string> typename = new Dictionary<string, string>()
+                                        {
+                                            {"1", "僅數學A"}, {"2", "僅數學B"}, {"3", "數學A或數學B"}, { "4","不參採數學"}, {"9", "不招生"}
+                                        };
+                        Dictionary<string, string> typecolor = new Dictionary<string, string>()
+                                        {
+                                            {"1", "#844200"}, {"2", "#5bb85b"}, {"3", "#4274d7"},{ "4","#f0ad4e"},  {"5", "#38b3d8"}, {"6", "#bb39d7"}, {"7", "#ed8f90"}, {"8", "#808080"}, {"9", "#d9534f"}
+                                        };
+                        <!--  申入 數學  圖示-->
+                        <div id="apply-math" class="col-xs-12 col-md-6">
+                            <canvas id="apply-math-area"></canvas>
+                        </div>
+                        var amdata = "";
+                        var amlabels = "";
+                        List<V_apply> V_applylist = ViewBag.V_apply;
+                        <div class="col-xs-12 col-md-6">
+                            @foreach (var apply in ViewBag.current_college.college_apply)
+                            {
+                                amdata += @apply.importance + ",";
+                                amlabels += @apply.importance + "%("+ @apply.times + ") " + @typename[apply.x_math.ToString()] + ",";
+
+                                <button data-toggle="modal" data-target="#apply-@apply.x_math" style="font-size:1.3em;border-radius: 40px; color: white; white-space: normal; background-color: @typecolor[apply.x_math.ToString()]; padding: 1px 8px; margin-bottom: 5px;" class="btn">@String.Format("{0:00.00}", @apply.importance)%</button>
+                                <span style="font-size:1.3em">@typename[apply.x_math.ToString()]</span>
+                                <br />
+
+                            <!--學系顯示框架-->
+                                <div class="modal fade" id="apply-@apply.x_math" style="text-align: center; font-size: 16px; top:15%" tabindex="-1" role="dialog" aria-labelledby="apply-@apply.x_math" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h3 class="modal-title">
+                                                    申請入學 @typename[apply.x_math.ToString()]
+                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                        <span aria-hidden="true"><i class="fa fa-times"></i></span>
+                                                    </button>
+                                                </h3>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p style="text-align: right;">共 @apply.times 校系組</p>
+                                                @foreach (var V_apply in V_applylist.Where(x => x.x_math == @apply.x_math).OrderBy(x => x.school_id))
+                                                {
+                                                    <p>
+                                                        @V_apply.school_name
+                                                        @if (V_apply.hidden || V_apply.confirmed_time == null)
+                                                        { @V_apply.dept_name}
+                                                        else
+                                                        { <a href="/Highschool/DepartmentIntro?dept_id=@V_apply.dept_id" target="_blank"> @V_apply.dept_name</a>}
+                                                        (@V_apply.edu_dept_name)
+                                                    </p>
+                                                }
+                                            </div>
+                                            <div class="modal-footer" style="border-top:none">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <!--學系顯示框架 End -->
+                            }
+                            
+                            @foreach (var c_explain in ViewBag.current_college.edu_college_explain)
+                            {
+                                if (c_explain.year=="109" && c_explain.type == "apply" && c_explain.item == "A")
+                                {                                    
+                                    <p style="font-size:1.3em">@MvcHtmlString.Create(@c_explain.explain.Replace("\r\n", "<br />").Replace("\r", "<br/>").Replace("\n", "<br/>").Replace("\t", "<br/>"))</p>
+                                }
+                            }
+                            <a id="A-math-data" style="display:none;">@amdata.Substring(0, (@amdata.Length) - 1)</a>
+                            <a id="A-math-labels" style="display:none;">@amlabels.Substring(0, (@amlabels.Length) - 1)</a>
+                        </div>
+                    }              
+                    <br /><br />
+
+
+                    @if (ViewBag.current_college.college_star.Count > 0)
+                    {
+                        <div class="col-xs-12">
+                            <p style="font-size:1.3em;color:#0aa7b4;">繁星推薦</p>
+                            <p style="font-size:1.3em;color: #ffa996;">111學測數學參採比例</p>
+                        </div>
+
+                        Dictionary<string, string> typename = new Dictionary<string, string>()
+                                        {
+                                            {"1", "僅數學A"}, {"2", "僅數學B"}, {"3", "數學A或數學B"}, { "4","不參採數學"}, {"9", "不招生"}
+                                        };
+                        Dictionary<string, string> typecolor = new Dictionary<string, string>()
+                                        {
+                                            {"1", "#844200"}, {"2", "#5bb85b"}, {"3", "#4274d7"},{ "4","#f0ad4e"},  {"5", "#38b3d8"}, {"6", "#bb39d7"}, {"7", "#ed8f90"}, {"8", "#808080"}, {"9", "#d9534f"}
+                                        };
+                        <!--  繁星 數學  圖示-->
+                        <div id="star-math" class="col-xs-12 col-md-6">
+                            <canvas id="star-math-area"></canvas>
+                        </div>
+                        var smdata = "";
+                        var smlabels = "";
+                        List<V_star> V_starlist = ViewBag.V_star;
+                        <div class="col-xs-12 col-md-6">
+                            @foreach (var star in ViewBag.current_college.college_star)
+                            {
+                                smdata += @star.importance + ",";
+                                smlabels += @star.importance + "% " + @typename[star.x_math.ToString()] + ",";
+                                <button data-toggle="modal" data-target="#star-@star.x_math" style="font-size:1.3em;border-radius: 40px; color: white; white-space: normal; background-color: @typecolor[star.x_math.ToString()]; padding: 1px 8px; margin-bottom: 5px;" class="btn">@String.Format("{0:00.00}", @star.importance)%</button>
+                                <span style="font-size:1.3em">@typename[star.x_math.ToString()]</span>
+                                <br />
+
+                            <!--學系顯示框架-->
+                                <div class="modal fade" id="star-@star.x_math" style="text-align: center; font-size: 16px; top:15%" tabindex="-1" role="dialog" aria-labelledby="star-@star.x_math" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h3 class="modal-title">
+                                                    繁星推薦 @typename[star.x_math.ToString()]
+                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                        <span aria-hidden="true"><i class="fa fa-times"></i></span>
+                                                    </button>
+                                                </h3>
+                                            </div>
+                                            <div class="modal-body">
+                                                @foreach (var V_star in V_starlist.Where(x => x.x_math == @star.x_math).OrderBy(x => x.school_id))
+                                                {
+                                                    <p>
+                                                        @V_star.school_name
+                                                        @if (V_star.hidden || V_star.confirmed_time == null)
+                                                        { @V_star.dept_name}
+                                                        else
+                                                        { <a href="/Highschool/DepartmentIntro?dept_id=@V_star.dept_id" target="_blank"> @V_star.dept_name</a>}
+                                                        (@V_star.edu_dept_name)
+                                                    </p>
+                                                }
+                                            </div>
+                                            <div class="modal-footer" style="border-top:none">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <!--學系顯示框架 End -->
+                            }
+                            <a id="S-math-data" style="display:none;">@smdata.Substring(0, (@smdata.Length) - 1)</a>
+                            <a id="S-math-labels" style="display:none;">@smlabels.Substring(0, (@smlabels.Length) - 1)</a>
+                        </div>
+                    }
+                    <br /><br />
+
+                    @if (ViewBag.current_college.college_exam.Count > 0)
+                    {
+                        <div class="col-xs-12">
+                            <p style="font-size:1.3em;color:#0aa7b4;">考試分發</p>
+                            <p style="font-size:1.3em;color: #ffa996;">111學測數學參採比例</p>
+                        </div>
+                        Dictionary<string, string> typename = new Dictionary<string, string>()
+                                        {
+                                            {"1", "僅數學A"}, {"2", "僅數學B"}, {"3", "數學A或數學B"}, { "4","不參採數學"}, {"9", "不招生"}
+                                        };
+                        Dictionary<string, string> typecolor = new Dictionary<string, string>()
+                                        {
+                                            {"1", "#844200"}, {"2", "#5bb85b"}, {"3", "#4274d7"},{ "4","#f0ad4e"},  {"5", "#38b3d8"}, {"6", "#bb39d7"}, {"7", "#ed8f90"}, {"8", "#808080"}, {"9", "#d9534f"}
+                                        };
+                            <!--  考分 數學  圖示-->
+                            <div id="exam-math" class="col-xs-12 col-md-6">
+                                <canvas id="exam-math-area"></canvas>
+                            </div>
+                        var emdata = "";
+                        var emlabels = "";
+                        @*<label style="background-color:@typecolor[exam.x_math.ToString()];width:20px;height:8px;margin-bottom:0px;"></label>*@
+                        List<V_exam> V_examlist = ViewBag.V_exam;
+                            <div class="col-xs-12 col-md-6">
+                                @foreach (var exam in ViewBag.current_college.college_exam)
+                                {
+                                    emdata += @exam.importance + ",";
+                                    emlabels += @exam.importance + "% " + @typename[exam.x_math.ToString()] + ",";
+                                    
+                                    <button data-toggle="modal" data-target="#exam-@exam.x_math" style="font-size:1.3em;border-radius: 40px; color: white; white-space: normal; background-color: @typecolor[exam.x_math.ToString()]; padding: 1px 8px; margin-bottom: 5px;" class="btn">@String.Format("{0:00.00}", @exam.importance)%</button>
+                                    <span style="font-size:1.3em">@typename[exam.x_math.ToString()]</span>
+                                    <br />
+
+                            <!--學系顯示框架-->
+                            <div class="modal fade" id="exam-@exam.x_math" style="text-align: center; font-size: 16px; top:15%" tabindex="-1" role="dialog" aria-labelledby="exam-@exam.x_math" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered" role="document">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">
+                                                考試分發 @typename[exam.x_math.ToString()]
+                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true"><i class="fa fa-times"></i></span>
+                                                </button>
+                                            </h3>
+                                        </div>
+                                        <div class="modal-body">
+                                            @foreach (var V_exam in V_examlist.Where(x => x.x_math == @exam.x_math).OrderBy(x => x.school_id))
+                                            {
+                                                <p>
+                                                    @V_exam.school_name
+                                                    @if (V_exam.hidden || V_exam.confirmed_time == null)
+                                                    { @V_exam.dept_name}
+                                                    else
+                                                    { <a href="/Highschool/DepartmentIntro?dept_id=@V_exam.dept_id" target="_blank"> @V_exam.dept_name</a>}
+                                                    (@V_exam.edu_dept_name)
+                                                </p>
+                                            }
+                                        </div>
+                                        <div class="modal-footer" style="border-top:none">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!--學系顯示框架 End -->
+                                }
+                                <a id="E-math-data" style="display:none;">@emdata.Substring(0, (@emdata.Length) - 1)</a>
+                                <a id="E-math-labels" style="display:none;">@emlabels.Substring(0, (@emlabels.Length) - 1)</a>
+                            </div>
+                    }
+                    
+                </dd>
+            </dl>
+            <!-- ////////////////////////////////       選才方向  chart           ///////////////////////////////////// -->
+            <script>
+                //申入 數學 chart
+                var M_ctx = document.getElementById('apply-math-area').getContext('2d');
+                var Mdata=document.getElementById('A-math-data').text.split(',');                
+                var Mlabels=document.getElementById('A-math-labels').text.split(',');
+                var M_chart = new Chart(M_ctx, {
+                    type: 'pie',
+                    data: {
+                        datasets: [{
+                            data: Mdata,
+                            backgroundColor: [                                
+                                '#844200',
+                                '#5bb85b',
+                                '#4274d7',
+                                '#f0ad4e',
+                                '#38b3d8',
+                                '#bb39d7',
+                                '#ed8f90',
+                                '#808080',
+                                '#d9534f'
+                            ]
+                        }],
+                        labels: Mlabels
+                    },
+                    options: {   
+                        legend: {
+                            display: false,
+                            position: 'bottom',
+                            //onHover: function (e) {
+                            //    e.target.style.cursor = 'pointer';
+                            //},
+                            labels: {
+                                fontSize: 14,
+                                fontStyle: 'bold'
+                            }
+                        },           
+                        onClick: function (evt, elements) {
+                            //console.log(evt, elements);                        
+                            //document.getElementsByClassName('modal fade')[0].remove();         
+                            //document.getElementById("apply-0").classList.add("in");
+                            //add   <div class="modal-backdrop fade in"></div>
+                            //var Ain = '<div class="modal-backdrop fade in"></div>';
+                            //$('#body').append(Ain);
+                        },
+                        responsive: true,          
+                        aspectRatio: 1,
+                        tooltips: {
+                            enabled: true,
+                            //intersect: false,
+                            mode: 'label',
+                            position: 'average',
+                            bodyFontSize: 14,
+                            callbacks: {
+                                label: function(tooltipItem, data) {
+                                    return " " + data.labels[tooltipItem.index];
+                                }
+                            }
+                        }
+                    }
+                });
+
+
+                //繁星 數學 chart
+                //M_ctx = document.getElementById('star-math-area').getContext('2d');
+                //Mdata=document.getElementById('S-math-data').text.split(',');                
+                //Mlabels=document.getElementById('S-math-labels').text.split(',');
+                //M_chart = new Chart(M_ctx, {
+                //    type: 'pie',
+                //    data: {
+                //        datasets: [{
+                //            data: Mdata,
+                //            backgroundColor: [                               
+                //                '#844200',
+                //                '#5bb85b',
+                //                '#4274d7',
+                //                '#f0ad4e',
+                //                '#38b3d8',
+                //                '#bb39d7',
+                //                '#ed8f90',
+                //                '#808080',
+                //                '#d9534f'
+                //            ]
+                //        }],
+                //        labels: Mlabels
+                //    },
+                //    options: {   
+                //        legend: {
+                //            display: false,
+                //            position: 'bottom',
+                //            //onHover: function (e) {
+                //            //    e.target.style.cursor = 'pointer';
+                //            //},
+                //            labels: {
+                //                fontSize: 14,
+                //                fontStyle: 'bold'
+                //            }
+                //        },           
+                //        onClick: function (evt, elements) {
+                //            //console.log(evt, elements);                        
+                //            //document.getElementsByClassName('modal fade')[0].remove();         
+                //            //document.getElementById("apply-0").classList.add("in");
+                //            //add   <div class="modal-backdrop fade in"></div>
+                //            //var Ain = '<div class="modal-backdrop fade in"></div>';
+                //            //$('#body').append(Ain);
+                //        },
+                //        responsive: true,
+                //        aspectRatio: 1,
+                //        tooltips: {
+                //            enabled: true,
+                //            mode: 'label',
+                //            position: 'average',
+                //            bodyFontSize: 14,
+                //            callbacks: {
+                //                label: function(tooltipItem, data) {
+                //                    return " " + data.labels[tooltipItem.index];
+                //                }
+                //            }
+                //        }
+                //    }
+                //});
+
+                //考分 數學 chart
+                //M_ctx = document.getElementById('exam-math-area').getContext('2d');
+                //Mdata=document.getElementById('E-math-data').text.split(',');                
+                //Mlabels=document.getElementById('E-math-labels').text.split(',');
+                //M_chart = new Chart(M_ctx, {
+                //    type: 'pie',
+                //    data: {
+                //        datasets: [{
+                //            data: Mdata,
+                //            backgroundColor: [                               
+                //                '#844200',
+                //                '#5bb85b',
+                //                '#4274d7',
+                //                '#f0ad4e',
+                //                '#38b3d8',
+                //                '#bb39d7',
+                //                '#ed8f90',
+                //                '#808080',
+                //                '#d9534f'
+                //            ]
+                //        }],
+                //        labels: Mlabels
+                //    },
+                //    options: {   
+                //        legend: {
+                //            display: false,
+                //            position: 'bottom',
+                //            //onHover: function (e) {
+                //            //    e.target.style.cursor = 'pointer';
+                //            //},
+                //            labels: {
+                //                fontSize: 14,
+                //                fontStyle: 'bold'
+                //            }
+                //        },           
+                //        onClick: function (evt, elements) {
+                //            //console.log(evt, elements);                        
+                //            //document.getElementsByClassName('modal fade')[0].remove();         
+                //            //document.getElementById("apply-0").classList.add("in");
+                //            //add   <div class="modal-backdrop fade in"></div>
+                //            //var Ain = '<div class="modal-backdrop fade in"></div>';
+                //            //$('#body').append(Ain);
+                //        },
+                //        responsive: true,
+                //        aspectRatio: 1,
+                //        tooltips: {
+                //            enabled: true,
+                //            mode: 'label',
+                //            position: 'average',
+                //            bodyFontSize: 14,
+                //            callbacks: {
+                //                label: function(tooltipItem, data) {
+                //                    return " " + data.labels[tooltipItem.index];
+                //                }
+                //            }
+                //        }
+                //    }
+                //});
+                
+                
+                //申入 領域  chart
+                M_ctx = document.getElementById('apply-domain-area').getContext('2d');
+                Mdata=document.getElementById('A-domain-data').text.split(',');                
+                Mlabels=document.getElementById('A-domain-labels').text.split(',');
+                var Mr_data=document.getElementById('A-domain-rdata').text.split(',');
+                M_chart = new Chart(M_ctx, {
+                    type: 'radar',
+                    data: {
+                        datasets: [{
+                            data: Mdata,
+                            backgroundColor: 'rgb(254, 224, 230, 0.4)',
+                            borderColor: '#ff6384',
+                            pointBackgroundColor: '#ff6384',
+                        }],
+                        labels: Mlabels
+                    },
+                    options: {   
+                        legend: {
+                            display: false,
+                            position: 'top',
+                            //onHover: function (e) {
+                            //    e.target.style.cursor = 'pointer';
+                            //},
+                            labels: {
+                                fontSize: 14,
+                                fontStyle: 'bold'
+                            }
+                        },           
+                        onClick: function (evt, elements) {
+                            //console.log(evt, elements);                        
+                            //document.getElementsByClassName('modal fade')[0].remove();         
+                            //document.getElementById("apply-0").classList.add("in");
+                            //add   <div class="modal-backdrop fade in"></div>
+                            //var Ain = '<div class="modal-backdrop fade in"></div>';
+                            //$('#body').append(Ain);
+                        },
+                        responsive: true,
+                        aspectRatio: 1,
+                        tooltips: {
+                            enabled: true,
+                            mode: 'label',
+                            position: 'average',
+                            bodyFontSize: 14,
+                            callbacks: {
+                                label: function(tooltipItem, data) {
+                                    return " " + Mr_data[tooltipItem.index];
+                                }
+                            }
+                        }
+                    }
+                });
+
+
+                //個申 課程成果  chart
+                //M_ctx = document.getElementById('apply-result-area').getContext('2d');
+                //Mdata=document.getElementById('A-result-data').text.split(',');                
+                //Mlabels=document.getElementById('A-result-labels').text.split(',');
+                //M_chart = new Chart(M_ctx, {
+                //    type: 'radar',
+                //    data: {
+                //        datasets: [{
+                //            data: Mdata,
+                //            backgroundColor: 'rgb(216, 236, 252, 0.4)',
+                //            borderColor: '#36a2eb',
+                //            pointBackgroundColor: '#36a2eb',
+                //        }],
+                //        labels: Mlabels
+                //    },
+                //    options: {   
+                //        legend: {
+                //            display: false,
+                //            position: 'top',
+                //            //onHover: function (e) {
+                //            //    e.target.style.cursor = 'pointer';
+                //            //},
+                //            labels: {
+                //                fontSize: 14,
+                //                fontStyle: 'bold'
+                //            }
+                //        },           
+                //        onClick: function (evt, elements) {
+                //            //console.log(evt, elements);                        
+                //            //document.getElementsByClassName('modal fade')[0].remove();         
+                //            //document.getElementById("apply-0").classList.add("in");
+                //            //add   <div class="modal-backdrop fade in"></div>
+                //            //var Ain = '<div class="modal-backdrop fade in"></div>';
+                //            //$('#body').append(Ain);
+                //        },
+                //        responsive: true,
+                //        aspectRatio: 1,
+                //        tooltips: {
+                //            enabled: true,
+                //            mode: 'label',
+                //            position: 'average',
+                //            bodyFontSize: 14,
+                //            callbacks: {
+                //                label: function(tooltipItem, data) {
+                //                    return " " + Mdata[tooltipItem.index]+"%";
+                //                }
+                //            }
+                //        }
+                //    }
+                //});
+            </script>
+
+            <!-- ////////////////////////////////       核心素養  圓餅script          ///////////////////////////////////// -->
+            <script>
+                    function paddingStr(type, str, lenght){
+                        if(str.length >= lenght)
+                            return str;
+                        else{
+                            if(type == "Left")
+                                return paddingStr("Left", "0" + str, lenght);
+                            else if(type == "Right")
+                                return paddingStr("Right", str + "0", lenght);
+                        }
+                    }
+            </script>
+            <script>
+                    var literacyList = @(Html.Raw(Json.Encode(Model.literacy_PolarArea)));
+                    var chartData=[];
+                    var chartbackgroundColor=[];
+                    var chartlabels=[];
+                    var colorNames = Object.keys(window.chartColors);
+                    var legendPosition = 'bottom';
+
+                    for(var i = 0;i<literacyList.length;i++){
+                        chartData.push(literacyList[i].importance);
+                        var colorName = colorNames[literacyList[i].id % colorNames.length];
+                        chartbackgroundColor.push(window.chartColors[colorName]);
+
+                        var num = literacyList[i].importance;
+                        var num2 = parseFloat(Math.round(num * 100) / 100).toFixed(2);
+                        var num3 = paddingStr("Left", num2.toString(), 5);
+                        chartlabels.push(num3 + "% " + literacyList[i].label);
+                    }
+                    var chartColors = window.chartColors;
+                    var color = Chart.helpers.color;
+
+                    var config = {
+                        data: {
+                            datasets: [{
+                                data: chartData,
+                                backgroundColor: chartbackgroundColor,
+                                label: '核心素養' // for legend
+                            }],
+                            labels: chartlabels
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio:true,
+                            legend: {
+                                position: legendPosition,
+                                onHover: function (e) {
+                                    e.target.style.cursor = 'pointer';
+                                },
+                                labels: {
+                                    fontSize: 14,
+                                    fontStyle: 'bold'
+                                },
+                            },
+                            title: {
+                                display: true,
+                                text: ''
+                            },
+                            scale: {
+                                ticks: {
+                                    beginAtZero: true
+                                },
+                                reverse: false
+                            },
+                            animation: {
+                                animateRotate: true,
+                                animateScale: true
+                            },
+                            tooltips: {
+                                enabled: true,
+                                mode: 'label',
+                                position: 'average',
+                                bodyFontSize: 14,
+                                callbacks: {
+                                    //title: function(tooltipItem, data) {
+                                    //    return data.labels[tooltipItem[0].index];// + data.datasets[0].data[tooltipItem.index];
+                                    //},
+                                    label: function(tooltipItem, data) {
+                                        return " " + data.labels[tooltipItem.index];
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    var ctx = document.getElementById('chart-area');
+                    var width=$(window).width();
+
+                    var div = document.getElementById('canvas-holder');
+
+                    window.onload = function() {
+                        width=$(window).width();
+                        if(width < 800){
+                            //config.options.legend.position = 'bottom';
+                            ctx.style.width = '300px';
+                            ctx.style.height = '420px';
+                            div.style.width = '300px';
+                            div.style.height = '420px';
+                        }
+                        else {
+                            //config.options.legend.position = 'right';
+                            ctx.style.width = '450px';
+                            ctx.style.height = '630px';
+                            div.style.width = '450px';
+                            div.style.height = '630px';
+                        }
+                        window.myPolarArea = Chart.PolarArea(ctx, config);
+                    };
+
+                    $(window).resize(function() {
+                        width=$(window).width();
+                        if(width < 800){
+                            //config.options.legend.position = 'bottom';
+                            //alert(ctx.arc.x()+','+ctx.arc.y()+','+ctx.arc.outerRadius()+','+ctx.arc.endAngle());
+                            //ctx.arc(this.x, this.y, this.outerRadius, this.startAngle, this.endAngle);
+                            ctx.style.width = '300px';
+                            ctx.style.height = '420px';
+                            div.style.width = '300px';
+                            div.style.height = '420px';
+                            //ctx.width = div.clientWidth+'px';
+                            //ctx.height = '420px';
+                        }
+                        else {
+                            //config.options.legend.position = 'right';
+                            ctx.style.width = '450px';
+                            ctx.style.height = '630px';
+                            div.style.width = '450px';
+                            div.style.height = '630px';
+                            //ctx.width = div.clientWidth+'px';
+                            //ctx.height = '420px';
+
+                        }
+                        window.myPolarArea.update();
+                    });
+            </script>
+            <br />                        
+            <p style="color:#337ab7">圖表計算分母為該學群調查校系組總數。</p>            
+
+            <h3><b>學群內學類間關係圖</b><img class="question" src="../Content/img/question.png" style="width:20px;height:20px" /></h3>
+            <dl class="row">
+                <dt class="col-xs-12  col-md-7 ">
+                    <img src="/Tool/DownloadFile?filePath=@ViewBag.current_college.content_file_source" style="width:100%" />
+                </dt>
+                <dd class="col-md-5 ">
+                    <p style="font-size:1.3em"> @ViewBag.current_college.content_file_title </p>
+                </dd>
+            </dl>
+        </div>
+                    }
+                    else
+                    {
+                        <div id="main" class="col-xs-12 col-sm-9 col-md-9">
+                            @*<p style="color:red">以下各項資料僅為現階段學系調查問卷所收集之初步資料，樣本數不足，且資料仍在持續更新中，僅供校系填答問卷及修正資料參考，請勿引用或外傳。</p>*@
+                            <nobr><b style="font-size:22pt">@ViewBag.current_college_name </b></nobr>
+                        
+                            <br />                            
+                            <div class="col-xs-12">
+                                <p style="float:right;">資料上架時間：@ViewBag.current_college.edit_time</p>
+                            </div>
+                            @*簡要介紹*@
+                            <dl class="row">
+                                <dt class="col-xs-12  col-md-2">
+                                    <span style="font-size:1.3em">簡要介紹</span>
+                                </dt>
+                                <dd class="col-xs-12  col-md-10 ">
+                                    
+                                    <p style="font-size:1.3em">@MvcHtmlString.Create(ViewBag.current_college.college_introduce.Replace("\r\n", "<br />").Replace("\r", "<br />").Replace("\n", "<br />").Replace("\t", "<br />"))</p>
+                                    
+                                </dd>
+                            </dl>
+
+                            @*主要類別*@
+                            <dl class="row">
+                                <dt class="col-xs-12  col-md-2">
+                                    <span style="font-size:1.3em">
+                                        <strong>
+                                            主要類別
+                                        </strong>
+                                    </span>
+                                </dt>
+                                <dd class="col-xs-12  col-md-10 ">
+                                    <a style="font-size:1.3em ; color:black "><u>一般不分系 &nbsp;</u></a>
+                                    @foreach (var major in Model.majorNotInRelation)
+                                    {
+                                        <a style="font-size:1.3em ; color:black " target="_blank" href="@Url.Action("MajorIntro", "Highschool", new { current_major_id = major.major_id })"><u>@major.major_name &nbsp;</u></a>
+                                    }
+                                </dd>
+                       
+
+                            </dl>
+                            
+                            @*一般不分系*@
+                            <dl class="row">
+                                <dt class="col-xs-12  col-md-2">
+                                    <span style="font-size:1.3em">
+                                        <strong>
+                                            一般不分系
+                                        </strong>
+                                    </span>
+                                </dt>
+                                <dd class="col-xs-12  col-md-10 ">
+                                    <!-- 上方標籤-->
+                                    <div class="">
+                                        <ul class="nav nav-tabs">
+                                            <li class="active" style="margin-bottom: 1px;"><a href="#tab4default" data-toggle="tab" class="btn-large btn-info">對應校系</a></li>
+                                        </ul>                                        
+                                    </div>
+                                    <!-- End 上方標籤-->
+                                    <!-- 標籤內容-->
+                                            <!-- 對應校系 id=tab4default-->
+                                            <div class="tab-pane fade in active" id="tab4default">
+                                                <div class="row">
+                                                    <div class="col-lg-12">
+                                                        <table class="table" id="table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>學校</th>
+                                                                    <th>系組名稱</th>
+                                                                    @*<th>碩博</th><th>成立年分</th>*@
+                                                                    <th style="width:27%">比較清單</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var departments in Model.departmentList)
+                                                                {
+                                                                    //if (departments.dept_major == Model.currentMajor.major_id)
+                                                                    //{
+                                                                    <tr>
+                                                                        <td><b>@departments.school.school_name</b></td>
+                                                                        <td>
+                                                                            @if (departments.account.log.Count > 0)
+                                                                            {
+                                                                                if (departments.dept_requirement.Count > 0)
+                                                                                {
+                                                                                    if (departments.dept_requirement.First().verify)
+                                                                                    {<a href="@Url.Action("DepartmentIntro", "Highschool" , new { dept_id=departments.dept_id })" target="_blank">@departments.dept_name</a> }
+                                                                                    else
+                                                                                    {
+                                                                                        if (departments.dept_requirement.First().confirmed_time != null)
+                                                                                        {<a style="color:black;">@departments.dept_name  (未公開資訊)</a>}
+                                                                                        else
+                                                                                        { <a style="color:black;">@departments.dept_name  (問卷填答中)</a>}
+                                                                                    }
+                                                                                }
+                                                                                else
+                                                                                { <a style="color:black;">@departments.dept_name  (問卷填答中)</a>}
+                                                                            }
+                                                                            else
+                                                                            {<a style="color:black;">@departments.dept_name  (尚未參與問卷調查)</a>}
+                                                                        </td>
+                                                                        <td>
+                                                                            @if (departments.account.log.Count > 0 && departments.dept_requirement.Count > 0 && departments.dept_requirement.First().verify)
+                                                                            {
+                                                                                <a href="javascript:void(0);" onclick="addToCompare('@departments.dept_id',1)">
+                                                                                    <img src="../Content/img/add.png" style="position:relative;left:4px;width:14px;height:14px;" />&nbsp;加入比較
+                                                                                </a>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <b>資料尚未完善</b>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                    //}
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                        <hr>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                </dd>                                
+                            </dl>
+
+                        </div>
+                    }
+            <!-------------------------------------------分分分隔線----------------------------------------------------------------->
+        </div>        
+    </div>
+    <!-- 對應主要內容之div, class= "main"-->
+</body>
+</html>
