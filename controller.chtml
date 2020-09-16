@@ -1,0 +1,674 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+using University_Survey.Filters;
+using University_Survey.Models;
+using University_Survey.Models.ViewModels;
+
+namespace University_Survey.Controllers
+{
+    public class HighschoolController : Controller
+    {
+        CollegeDB db = new CollegeDB();
+        private CurrentUserInfo _currentUser
+        {
+            get { return CurrentUserInfo.GetCurrentUserInfo(); }
+            set { System.Web.HttpContext.Current.Session["CurrentUserInfo"] = value; }
+        }        
+
+        // GET: Highschool
+        public ActionResult MajorList()
+        {
+            //List<college> collegeList = db.college.ToList();
+            //List<college_major_relation> collegeListRelationList = db.college_major_relation.ToList();
+            //List<major> majorList = db.major.ToList();
+            MajorInfoViewModels model = new MajorInfoViewModels();
+            model.majorList = db.major.ToList();
+            model.relationList = db.college_major_relation.ToList();
+            model.collegeList = db.college.Where(x => x.college_id!=19).ToList();
+
+            return View(model);
+        }
+
+        public ActionResult MajorIntro(int? current_major_id, int? collegeFrom)//collegeFrom 是因應有些跨學群學類，前端需要知道她從哪個學群聯進來的
+        {
+            if (current_major_id == null)
+            {
+                return RedirectToAction("MajorList");
+            }
+
+            int major_id = current_major_id.Value;
+            college_major_relation current_relation = db.college_major_relation.FirstOrDefault(x => x.major_id == major_id);
+            //List<college_major_relation> current_relation = db.college_major_relation.Where(x => x.major_id == major_id).ToList();
+            int college_id = current_relation.college_id;
+            int defaultCollegeId = college_id;
+            if (collegeFrom != null)
+            {
+                defaultCollegeId = (int)collegeFrom;
+            }
+            ViewBag.collegeFrom = defaultCollegeId;
+            MajorInfoViewModels model = new MajorInfoViewModels();
+            model.currentMajor = db.major.SingleOrDefault(x => x.major_id == major_id);
+            model.currentCollege = db.college.SingleOrDefault(x => x.college_id == college_id);
+            model.majorList = db.major.ToList();
+            model.relationList = db.college_major_relation.ToList();
+            model.collegeList = db.college.Where(x => x.college_id!=19).ToList();
+            model.schoolList = db.school.ToList();
+            model.misunderstand = db.major_misunderstand.Where(x=>x.major_id==major_id).ToList();
+            if (Session["CurrentUserInfo"] != null)
+            {
+                if (CurrentUserInfo.GetCurrentUserInfo().UserId.Length >= 3 && CurrentUserInfo.GetCurrentUserInfo().UserId.Substring(0, 3) == "000") { model.departmentList = db.department.Where(x => !x.hidden && x.dept_major == major_id).ToList(); }
+                else { model.departmentList = db.department.Where(x => !x.hidden && x.dept_id.Substring(0, 3) != "000" && x.dept_major == major_id).ToList(); }
+            }
+            else
+            { model.departmentList = db.department.Where(x => !x.hidden && x.dept_id.Substring(0, 3) != "000" && x.dept_major == major_id).ToList(); }
+            model.majorLiteracyList = db.major_literacy.Where(x => x.major_id == current_major_id).OrderByDescending(x => x.importance).ToList();
+            model.majorHighSchoolDomainList = db.major_high_school_domain.Where(x => x.major_id == current_major_id).OrderByDescending(x => x.importance).ToList();
+            model.majorExtraCourseList = db.major_extra_course.Where(x => x.major_id == current_major_id).OrderByDescending(x => x.importance).ToList();
+            model.majorAbilityList = db.major_ability.Where(x => x.major_id == current_major_id).OrderByDescending(x => x.importance).ToList();
+            model.majorPersonalityList = db.major_personality.Where(x => x.major_id == current_major_id).OrderByDescending(x => x.importance).ToList();
+            List<extraCourseName> extraCourseNameList = new List<extraCourseName>();
+            List<major_extra_course> majorExtraCourses = db.major_extra_course.Where(x => x.major_id == major_id).ToList();
+            foreach (var majorExtracourse in majorExtraCourses)
+            {
+                high_school_extra_course course = db.high_school_extra_course.SingleOrDefault(x => x.course_id == majorExtracourse.course_id);
+                extraCourseName coursename = new extraCourseName
+                {
+                    courseName = course.course_name,
+                    courseImportance = majorExtracourse.importance
+                };
+                extraCourseNameList.Add(coursename);
+            }
+            model.extraCourseNameList = extraCourseNameList;
+            ViewBag.current_major_id = major_id;
+            ViewBag.current_college_id = college_id;
+            if (_currentUser != null && _currentUser.UserLevel == "8")
+            {
+                ViewBag.favorite = db.user_love.Where(x => x.user_id == _currentUser.UserId && x.type == "2" && x.type_id == current_major_id.ToString() && x.delete_time == null).OrderByDescending(x => x.create_time).FirstOrDefault() == null ? false : true;
+            }
+
+            List<V_apply> V_apply = db.V_apply.Where(x => x.major_id == current_major_id).ToList();
+            ViewBag.V_apply = V_apply;
+            List<V_star> V_star = db.V_star.Where(x => x.major_id == current_major_id).ToList();
+            ViewBag.V_star = V_star;
+            List<V_exam> V_exam = db.V_exam.Where(x => x.major_id == current_major_id).ToList();
+            ViewBag.V_exam = V_exam;
+            return View(model);
+
+        }
+
+        public ActionResult DepartmentIntro(String dept_id)
+        {
+            if (dept_id == null || dept_id.Length <= 0 || dept_id.Length > 6)
+            {
+                return RedirectToAction("MajorList");
+            }
+            DepartmentIntroViewModels model = new DepartmentIntroViewModels();            
+            model.currentDepartment = db.department.Single(x => x.dept_id == dept_id);
+            model.selectedRequirement = db.dept_requirement.SingleOrDefault(x => x.dept_id == dept_id);
+            if (model.selectedRequirement == null || !(model.selectedRequirement.verify) ) { return RedirectToAction("MajorList"); }
+
+            model.electiveList = db.dept_elective.Where(x => x.dept_id == dept_id).ToList();
+            model.requiredList = db.dept_required.Where(x => x.dept_id == dept_id).ToList();
+            model.jobList = db.dept_job.Where(x => x.dept_id == dept_id).ToList();
+            model.contentList = db.dept_content.Where(x => x.dept_id == dept_id).ToList();
+            model.courseList = db.dept_course.Where(x => x.dept_id == dept_id).ToList();
+            model.alumnusList = db.alumnus.Where(x => x.dept_id == dept_id).ToList();
+            model.requiredLiteracyList = db.required_literacy.Where(x => x.dept_id == dept_id).ToList();
+            model.literacyList = db.literacy.ToList();
+            model.requiredMultipleAbilityList = db.required_multiple_ability.Where(x => x.dept_id == dept_id).OrderByDescending(x => x.importance).ToList();
+            model.multipleAbilityList = db.multiple_ability.ToList();
+            model.requiredPersonalityList = db.required_personality.Where(x => x.dept_id == dept_id).OrderByDescending(x => x.importance).ToList();
+            model.personalityList = db.personality.ToList();
+            courseList requiredCoursedList = new courseList
+            {
+                grade0 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 0).ToList(),
+                grade1 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 1).ToList(),
+                grade2 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 2).ToList(),
+                grade3 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 3).ToList(),
+                grade4 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 4).ToList(),
+                grade5 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 5).ToList(),
+                grade6 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 6).ToList(),
+                grade7 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 7).ToList(),
+            };
+            department current_department = db.department.Single(x => x.dept_id == dept_id);
+            major current_major = db.major.Single(x => x.major_id == current_department.major.major_id);
+            List<college_major_relation> current_relation = db.college_major_relation.Where(x => x.major_id == current_major.major_id).ToList();
+            model.requiredCourseList = requiredCoursedList;
+
+            college currentSecCollege = null;
+            if (current_relation.Count == 2)
+            {
+                currentSecCollege = current_relation.Last().college;
+            }
+            model.currentCollege = current_relation.First().college;
+            model.currentSecCollege = currentSecCollege;
+            ViewBag.current_dept_id = dept_id;
+            if (_currentUser != null && _currentUser.UserLevel == "8")
+            {
+                ViewBag.favorite = db.user_love.Where(x => x.user_id == _currentUser.UserId && x.type == "3" && x.type_id == dept_id.ToString() && x.delete_time == null).OrderByDescending(x => x.create_time).FirstOrDefault() == null ? false : true;
+            }
+            List<V_apply> V_apply = db.V_apply.Where(x => x.dept_id == dept_id).ToList();
+            ViewBag.V_apply = V_apply;
+            List<V_star> V_star = db.V_star.Where(x => x.dept_id == dept_id).ToList();
+            ViewBag.V_star = V_star;
+            List<V_exam> V_exam = db.V_exam.Where(x => x.dept_id == dept_id).ToList();
+            ViewBag.V_exam = V_exam;
+            return View(model);
+        }
+
+        public ActionResult DepartmentCompare(String ids)
+        {
+            List<DepartmentIntroViewModels> departmentCompare = new List<DepartmentIntroViewModels>();
+            List<String> deptCompareID = new List<string>();
+            ToolController toolController = new ToolController();
+            CompareIDList compareLlist = new CompareIDList();
+            
+            DepartmentCompareViewModels model = new DepartmentCompareViewModels();
+
+            if (string.IsNullOrEmpty(ids))
+            {
+                ToolController.Info info = toolController.GetCookie("Compare");
+                if (info == null)
+                    return RedirectToAction("MajorList", "Highschool");
+
+                compareLlist = Newtonsoft.Json.JsonConvert.DeserializeObject<CompareIDList>(info.Value);
+            }
+            else
+            {
+                Array ids_array = ids.Split(',');
+                compareLlist.checkedDept = new List<string>();
+                foreach (string id in ids_array)
+                {
+                    compareLlist.checkedDept.Add(id);
+                }
+            }
+            
+            if (compareLlist.checkedDept == null || compareLlist.checkedDept.Count() < 2)
+                return RedirectToAction("MajorList", "Highschool"); 
+            
+            deptCompareID = compareLlist.checkedDept;
+            int DepartmentCompareNumber = deptCompareID.Count();
+            
+            ViewBag.DepartmentCompareNumber = DepartmentCompareNumber;
+            //比較項目存 DB 比較清單(compare)
+            saveCompare("C", deptCompareID.ToArray());
+            foreach (var dept_id in deptCompareID)
+            {
+                DepartmentIntroViewModels dmodel = new DepartmentIntroViewModels();
+                dmodel.currentDepartment = db.department.Single(x => x.dept_id == dept_id);
+                dmodel.selectedRequirement = db.dept_requirement.SingleOrDefault(x => x.dept_id == dept_id);
+                dmodel.electiveList = db.dept_elective.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.requiredList = db.dept_required.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.jobList = db.dept_job.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.contentList = db.dept_content.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.courseList = db.dept_course.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.alumnusList = db.alumnus.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.requiredLiteracyList = db.required_literacy.Where(x => x.dept_id == dept_id).ToList();
+                dmodel.literacyList = db.literacy.ToList();
+                dmodel.requiredMultipleAbilityList = db.required_multiple_ability.Where(x => x.dept_id == dept_id).OrderByDescending(x => x.importance).ToList();
+                dmodel.multipleAbilityList = db.multiple_ability.ToList();
+                dmodel.requiredPersonalityList = db.required_personality.Where(x => x.dept_id == dept_id).OrderByDescending(x => x.importance).ToList();
+                dmodel.personalityList = db.personality.ToList();
+                courseList requiredCoursedList = new courseList
+                {
+                    grade0 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 0).ToList(),
+                    grade1 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 1).ToList(),
+                    grade2 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 2).ToList(),
+                    grade3 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 3).ToList(),
+                    grade4 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 4).ToList(),
+                    grade5 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 5).ToList(),
+                    grade6 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 6).ToList(),
+                    grade7 = db.dept_required.Where(x => x.dept_id == dept_id && x.grade == 7).ToList(),
+                };
+                department current_department = db.department.Single(x => x.dept_id == dept_id);
+                major current_major = db.major.Single(x => x.major_id == current_department.major.major_id);
+                List<college_major_relation> current_relation = db.college_major_relation.Where(x => x.major_id == current_major.major_id).ToList();
+                dmodel.requiredCourseList = requiredCoursedList;
+                college currentSecCollege = null;
+                if (current_relation.Count == 2)
+                {
+                    currentSecCollege = current_relation.Last().college;
+                }
+                college currentCollege = current_relation.First().college;
+                dmodel.currentCollege = currentCollege;
+                dmodel.currentSecCollege = currentSecCollege;
+
+                departmentCompare.Add(dmodel);
+            }
+            model.abilityList = db.multiple_ability.ToList();
+            model.personalityList = db.personality.ToList();
+            model.departmentCompare = departmentCompare;
+            //悬浮窗session比較内容
+            //System.Web.HttpContext.Current.Session["checkedDept"] = deptCompareID;
+
+            List<V_apply> V_apply = db.V_apply.ToList();
+            ViewBag.V_apply = V_apply;
+            List<V_star> V_star = db.V_star.ToList();
+            ViewBag.V_star = V_star;
+            List<V_exam> V_exam = db.V_exam.ToList();
+            ViewBag.V_exam = V_exam;
+
+
+            return View(model);
+        }
+
+        public ActionResult MajorCompare(String ids)
+        {
+            List<int> majorCompareID = new List<int>();
+            ToolController toolController = new ToolController();
+            CompareIDList compareLlist = new CompareIDList();
+
+            if (string.IsNullOrEmpty(ids))
+            {
+                ToolController.Info info = toolController.GetCookie("Compare");
+                if (info == null)
+                    return RedirectToAction("MajorList", "Highschool");
+
+                compareLlist = Newtonsoft.Json.JsonConvert.DeserializeObject<CompareIDList>(info.Value);
+            }
+            else
+            {
+                Array ids_array = ids.Split(',');
+                compareLlist.checkedMajor = new List<int>();
+                foreach (string id in ids_array)
+                {
+                    int cid = int.Parse(id);
+                    compareLlist.checkedMajor.Add(cid);
+                }
+            }
+
+            if (compareLlist.checkedMajor == null || compareLlist.checkedMajor.Count() < 2)
+                return RedirectToAction("MajorList", "Highschool");
+
+            majorCompareID = compareLlist.checkedMajor;
+            int MajorCompareNumber = majorCompareID.Count();
+            
+            ViewBag.MajorCompareNumber = MajorCompareNumber;
+            List<major> majorsList = new List<major>();
+            List<MajorInfoViewModels> comparedMajor = new List<MajorInfoViewModels>();
+            MajorCompareViewModels model = new MajorCompareViewModels();
+
+            //比較項目存 DB 比較清單(compare)
+            string[] majorCompareIDs = majorCompareID.Select(x => x.ToString()).ToArray();
+            saveCompare("B", majorCompareIDs);
+
+            List<V_apply> V_apply = db.V_apply.Where(x => x.major_id == null).ToList();            
+            List<V_star> V_star = db.V_star.Where(x => x.major_id == null).ToList(); ;
+            List<V_exam> V_exam = db.V_exam.Where(x => x.major_id == null).ToList(); ;
+            foreach (var major_id in majorCompareID)
+            {
+                college_major_relation current_relation = db.college_major_relation.FirstOrDefault(x => x.major_id == major_id);
+                int college_id = current_relation.college_id;
+                MajorInfoViewModels Mmodel = new MajorInfoViewModels();
+                Mmodel.currentMajor = db.major.SingleOrDefault(x => x.major_id == major_id);
+                Mmodel.currentCollege = db.college.SingleOrDefault(x => x.college_id == college_id);
+                Mmodel.majorList = db.major.ToList();
+                Mmodel.relationList = db.college_major_relation.ToList();
+                Mmodel.collegeList = db.college.ToList();
+                Mmodel.schoolList = db.school.ToList();
+                Mmodel.misunderstand = db.major_misunderstand.Where(x=>x.major_id== major_id).ToList();
+                if (Session["CurrentUserInfo"] != null)
+                {
+                    if (CurrentUserInfo.GetCurrentUserInfo().UserId.Length >= 3 && CurrentUserInfo.GetCurrentUserInfo().UserId.Substring(0, 3) == "000") { Mmodel.departmentList = db.department.Where(x => !x.hidden && x.dept_major == major_id).ToList(); }
+                    else { Mmodel.departmentList = db.department.Where(x => !x.hidden && x.dept_id.Substring(0, 3) != "000" && x.dept_major == major_id).ToList(); }
+                }
+                else
+                { Mmodel.departmentList = db.department.Where(x => !x.hidden && x.dept_id.Substring(0, 3) != "000" && x.dept_major == major_id).ToList(); }
+                Mmodel.majorLiteracyList = db.major_literacy.Where(x => x.major_id == major_id).OrderByDescending(x => x.importance).ToList();
+                Mmodel.majorHighSchoolDomainList = db.major_high_school_domain.Where(x => x.major_id == major_id).OrderByDescending(x => x.importance).ToList();
+                Mmodel.majorExtraCourseList = db.major_extra_course.Where(x => x.major_id == major_id).OrderByDescending(x => x.importance).ToList();
+                Mmodel.majorAbilityList = db.major_ability.Where(x => x.major_id == major_id).OrderByDescending(x => x.importance).ToList();
+                Mmodel.majorPersonalityList = db.major_personality.Where(x => x.major_id == major_id).OrderByDescending(x => x.importance).ToList();
+                List<extraCourseName> extraCourseNameList = new List<extraCourseName>();
+                List<major_extra_course> majorExtraCourses = db.major_extra_course.Where(x => x.major_id == major_id).ToList();
+                foreach (var majorExtracourse in majorExtraCourses)
+                {
+                    high_school_extra_course course = db.high_school_extra_course.SingleOrDefault(x => x.course_id == majorExtracourse.course_id);
+                    extraCourseName coursename = new extraCourseName
+                    {
+                        courseName = course.course_name,
+                        courseImportance = majorExtracourse.importance
+                    };
+                    extraCourseNameList.Add(coursename);
+                    Mmodel.extraCourseNameList = extraCourseNameList;
+                    
+                }
+                majorsList.Add(db.major.Find(major_id));
+                comparedMajor.Add(Mmodel);
+
+                V_apply.AddRange(db.V_apply.Where(x => x.major_id == major_id).ToList());                
+                V_star.AddRange(db.V_star.Where(x => x.major_id == major_id).ToList());                
+                V_exam.AddRange(db.V_exam.Where(x => x.major_id == major_id).ToList());
+                
+            }
+            ViewBag.V_apply = V_apply;
+            ViewBag.V_star = V_star;
+            ViewBag.V_exam = V_exam;
+
+            model.majorCompare = comparedMajor;
+            model.majorsList = majorsList;
+            model.abilityList = db.multiple_ability.ToList();
+            model.personalityList = db.personality.ToList();
+            model.literacyList = db.literacy.ToList();
+            model.domainList = db.high_school_domain.ToList();
+            model.extraList = db.high_school_extra_course.ToList();            
+
+            //悬浮窗session比較内容
+            //System.Web.HttpContext.Current.Session["checkedMajor"] = majorCompareID;
+            return View(model);
+        }
+        
+        public ActionResult CollegeCompare(String ids)
+        {
+            List<int> collegeCompareID = new List<int>();
+            ToolController toolController = new ToolController();
+            CompareIDList compareLlist = new CompareIDList();
+
+            if (string.IsNullOrEmpty(ids))
+            {
+                ToolController.Info info = toolController.GetCookie("Compare");
+                if (info == null)
+                    return RedirectToAction("CollegeList", "Highschool");
+                compareLlist = Newtonsoft.Json.JsonConvert.DeserializeObject<CompareIDList>(info.Value);
+            }
+            else
+            {
+                Array ids_array = ids.Split(',');
+                compareLlist.checkedCollege = new List<int>();
+                foreach (string id in ids_array)
+                {
+                    int cid = int.Parse(id);
+                    compareLlist.checkedCollege.Add(cid);
+                }
+            }
+            
+            if (compareLlist.checkedCollege == null || compareLlist.checkedCollege.Count() < 2)
+                return RedirectToAction("CollegeList", "Highschool");
+
+            collegeCompareID = compareLlist.checkedCollege;
+            int CollegeCompareNumber = collegeCompareID.Count();
+            
+            ViewBag.CollegeCompareNumber = CollegeCompareNumber;
+            CollegeCompareViewModels model = new CollegeCompareViewModels();
+            List<String> collegeCompareName = new List<string> { };
+            List<college> collegesList = new List<college> { };
+            List<CollegeInfoViewModels> civm = new List<CollegeInfoViewModels> { };
+
+            //比較項目存 DB 比較清單(compare)
+            string[] collegeCompareIDs = collegeCompareID.Select(x => x.ToString()).ToArray();
+            saveCompare("A", collegeCompareIDs);
+
+            foreach (var current_college_id in collegeCompareID)
+            {
+                List<college> collegeList = db.college.ToList();
+                collegeList.Remove(collegeList.Last());
+                CollegeInfoViewModels modelL = new CollegeInfoViewModels();
+                modelL.currentCollege = db.college.Single(x => x.college_id == current_college_id);
+                modelL.relationList = db.college_major_relation.Where(x => x.college_id == current_college_id).ToList();
+                modelL.collegeList = collegeList;
+                modelL.interestList = db.college_interest.Where(x => x.college_id == current_college_id).ToList();
+                modelL.knowledgeList = db.college_knowledge.Where(x => x.college_id == current_college_id).ToList();
+                modelL.domainList = db.college_high_school_domain.Where(x => x.college_id == current_college_id).ToList();
+                modelL.abilityList = db.college_ability.Where(x => x.college_id == current_college_id).ToList();
+                modelL.jobList = db.college_job.Where(x => x.college_id == current_college_id).ToList();
+                modelL.collegeRelationList = db.college_college.Where(x => x.college_id == current_college_id).ToList();
+                modelL.literacyList = db.college_literacy.Where(x => x.college_id == current_college_id).ToList();
+                modelL.extra_courseList = db.college_extra_course.Where(x => x.college_id == current_college_id).ToList();
+                modelL.personalityList = db.college_personality.Where(x => x.college_id == current_college_id).ToList();
+                modelL.jobgroupList = db.college_job_group.Where(x => x.college_id == current_college_id).ToList(); 
+                collegesList.Add(db.college.Find(current_college_id));
+                civm.Add(modelL);
+            }
+            
+            model.collegesList = collegesList;
+            model.collegeCompare = civm;
+
+            //悬浮窗session内容
+            //System.Web.HttpContext.Current.Session["checkedCollege"] = collegeCompareID;
+            return View(model);
+        }
+
+        public ActionResult SchoolIntro()
+        {
+            return View();
+        }
+
+        public ActionResult SearchDepartmentList()
+        {
+            List<college> collegeList = db.college.ToList();
+            List<major> majorList = db.major.ToList();
+            List<department> departmentList = db.department.Where(x => x.school_id == "011").ToList();
+            SearchDepartmentViewModels model = new SearchDepartmentViewModels();
+            model.collegeList = collegeList;
+            model.majorList = majorList;
+            model.departmentList = departmentList;
+            ViewBag.SelectedCollege = collegeList.Last().college_id;
+            ViewBag.SelectedMajor = majorList.Last().major_id;
+            
+            return View(model);
+        }        
+
+        public ActionResult CollegeList()
+        {            
+            CollegeInfoViewModels model = new CollegeInfoViewModels();
+            model.collegeList = db.college.ToList();
+
+            return View(model);
+        }
+
+        public ActionResult CollegeIntro(int? current_college_id)
+        {
+            if (current_college_id == null)
+            {
+                return RedirectToAction("CollegeList");
+            }
+            List<college> collegeList = db.college.ToList();
+
+
+            //collegeList.Remove(collegeList.Last());
+            CollegeInfoViewModels model = new CollegeInfoViewModels();
+            if (current_college_id!=19)
+            { model.relationList = db.college_major_relation.ToList();}
+            else
+            {
+                model.majorNotInRelation = db.major.Where(x => x.complex == true && x.major_id!=124).ToList();
+                if (Session["CurrentUserInfo"] != null)
+                {
+                    if (CurrentUserInfo.GetCurrentUserInfo().UserId.Length >= 3 && CurrentUserInfo.GetCurrentUserInfo().UserId.Substring(0, 3) == "000") { model.departmentList = db.department.Where(x => !x.hidden && x.dept_major == 124).ToList(); }
+                    else { model.departmentList = db.department.Where(x => !x.hidden && x.dept_id.Substring(0, 3) != "000" && x.dept_major == 124).ToList(); }
+                }
+                else
+                { model.departmentList = db.department.Where(x => !x.hidden && x.dept_id.Substring(0, 3) != "000" && x.dept_major == 124).ToList(); }
+            }   
+                     
+            model.collegeList = collegeList;
+            model.interestList = db.college_interest.Where(x => x.college_id == current_college_id).ToList();
+            model.knowledgeList = db.college_knowledge.Where(x => x.college_id == current_college_id).ToList();
+            model.domainList = db.college_high_school_domain.Where(x => x.college_id == current_college_id).ToList();
+            model.abilityList = db.college_ability.Where(x => x.college_id == current_college_id).ToList();
+            model.jobList = db.college_job.Where(x => x.college_id == current_college_id).ToList();
+            model.collegeRelationList = db.college_college.Where(x => x.college_id == current_college_id).ToList();
+            model.literacyList = db.college_literacy.Where(x => x.college_id == current_college_id).ToList();
+            model.jobgroupList = db.college_job_group.Where(x => x.college_id == current_college_id ).ToList();
+            if (model.literacy_PolarArea == null) model.literacy_PolarArea = new List<PolarArea>();
+            foreach (var l in model.literacyList)
+            {
+                PolarArea p = new PolarArea()
+                {
+                    id = l.literacy.literacy_id,
+                    label = l.literacy.literacy_group + "：" + l.literacy.literacy_name + " ",
+                    importance = l.importance,
+                };
+                model.literacy_PolarArea.Add(p);
+            }
+            //model.literacy_PolarArea.Sort((x, y) => { return -x.importance.CompareTo(y.importance); });
+            model.extra_courseList = db.college_extra_course.Where(x => x.college_id == current_college_id).ToList();
+            model.personalityList = db.college_personality.Where(x => x.college_id == current_college_id).ToList();
+            ViewBag.current_college_name = db.college.Find(current_college_id).college_name;
+            ViewBag.current_college = db.college.Find(current_college_id);
+            if (_currentUser != null && _currentUser.UserLevel == "8")
+            {
+                ViewBag.favorite = db.user_love.Where(x => x.user_id == _currentUser.UserId && x.type == "1" && x.type_id == current_college_id.ToString() && x.delete_time == null).OrderByDescending(x => x.create_time).FirstOrDefault() == null ? false : true;
+            }
+            List<V_apply> V_apply = db.V_apply.Where(x => x.collego1_id == current_college_id.ToString() || x.collego2_id == current_college_id.ToString()).ToList();
+            ViewBag.V_apply = V_apply;
+            List<V_star> V_star = db.V_star.Where(x => x.collego1_id == current_college_id.ToString() || x.collego2_id == current_college_id.ToString()).ToList();
+            ViewBag.V_star = V_star;
+            List<V_exam> V_exam = db.V_exam.Where(x => x.collego1_id == current_college_id.ToString() || x.collego2_id == current_college_id.ToString()).ToList();
+            ViewBag.V_exam = V_exam;
+            return View(model);
+        }
+
+        public ActionResult school()
+        {
+            //List<string> city_list = db.school.Where(x => x.city == city).Distinct(city).ToList();
+            return View();
+        }
+
+        [AjaxValidateAntiForgeryToken]
+        public JsonResult getSchoolList(string city)
+        {
+            //if (Regex.IsMatch(text.ToString(), @"[`,.!@#*_~<>$%\-\^\+\&\\\/\?\|:\{}()';=]"))
+            //{
+            //    return Json(new { success = false, errMsg = "搜尋關鍵字中不可包含['&'、'+'、'空白']以外之特殊符號!" });
+            //}
+            
+            //city = city.Replace("離島", "金門縣");
+            //city = city.Replace("離島", "澎湖縣");
+            //city = city.Replace("離島", "連江縣");
+            
+            city = city.Replace("花蓮縣", "花蓮");
+            city = city.Replace("彰化縣", "彰化");
+            city = city.Replace("屏東縣", "屏東");
+            city = city.Replace("苗栗縣", "苗栗");
+            city = city.Replace("臺東縣", "臺東");
+
+            try
+            {
+                var schools = new List<school>().Select(x => new { school_id = x.school_id, school_name = x.school_name, weblink = x.weblink, verify = x.verify });
+                
+                if(city == "離島")
+                {
+                    schools = db.school.Where(x => x.city.Contains("金門縣") || x.city.Contains("澎湖縣") || x.city.Contains("連江縣") && x.school_id != "000" && x.hidden == false).Select(x => new { school_id = x.school_id, school_name = x.school_name, weblink = x.weblink, verify = x.verify });
+                }
+                else if (city != "點擊地圖")
+                {
+                    schools = db.school.Where(x => x.city.Contains(city) && x.school_id != "000" && x.hidden == false).Select(x => new { school_id = x.school_id, school_name = x.school_name, weblink = x.weblink, verify = x.verify });
+                }
+                else
+                {
+                    schools = db.school.Where(x => x.school_id != "000" && x.hidden == false).Select(x => new { school_id = x.school_id, school_name = x.school_name, weblink = x.weblink, verify = x.verify });
+                }
+
+                return Json(new { success = true, data = schools.ToList() });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, data = "", errMsg=ex.Message });
+            }
+
+            
+        }
+        /// <summary>
+        /// 認識大學頁面點擊學校名稱取得學校基本資料
+        /// </summary>
+        /// <param name="schoolId"></param>
+        /// <returns></returns>
+        public JsonResult getSchoolInf(string schoolId)
+        {
+            try
+            {
+                school s = db.school.Find(schoolId);
+                //var s_inf = new { school_id = "", school_name = "", school_address = "", weblink = "", studentlink="", youtubelink="" };
+                if (s != null && s.verify == true)
+                {
+                    var s_inf = new {
+                        school_id = schoolId, school_name = s.school_name, school_address = s.school_address,
+                        weblink = s.weblink, studentlink = s.studentlink, youtubelink = s.youtubelink, recruitmentlink = s.recruitmentlink,
+                        verify_special = s.verify_special, verify_resource = s.verify_resource, verify_living = s.verify_living, verify_activity = s.verify_activity
+                    };
+
+                    var s_address_area_list = db.school_area.Where(x => x.school_id == schoolId).Select(x => new { num = x.num, school_id = x.school_id, area_name = x.area_name, area_address = x.area_address });
+                    List<school_detail> s_d_list = db.school_detail.Where(x=>x.school_id == schoolId).ToList();
+                    if (s_d_list.Count > 0)
+                    {
+                        //item_type => A=學校特色 , B=>學校資源 ,C=生活資源 ,D=學生活動
+                        //----學校特色
+                        //--school/special/num.jpeg
+                        //----學校資源
+                        //--school/resource/num.jpeg
+                        //----生活資源
+                        //--school/living/num.jpeg
+                        //----學生活動
+                        //--school/activity/num.jpeg
+                        var temp = s_d_list.Where(x => x.item_type == "").Select(x => new { item_desc = "", item_file = "", item_Authfile = "" });
+                        var s_d_a_list = temp;
+                        var s_d_b_list = temp;
+                        var s_d_c_list = temp;
+                        var s_d_d_list = temp;
+
+                        if (_currentUser != null && _currentUser.UserLevel == "0")
+                        {
+                            s_d_a_list = s.verify_special == true ? s_d_list.Where(x => x.item_type == "A").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = x.authority_file }) : temp;
+                            s_d_b_list = s.verify_resource == true ? s_d_list.Where(x => x.item_type == "B").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = x.authority_file }) : temp;
+                            s_d_c_list = s.verify_living == true ? s_d_list.Where(x => x.item_type == "C").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = x.authority_file }) : temp;
+                            s_d_d_list = s.verify_activity == true ? s_d_list.Where(x => x.item_type == "D").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = x.authority_file }) : temp;
+                        }
+                        else
+                        {
+                            s_d_a_list = s.verify_special == true ? s_d_list.Where(x => x.item_type == "A").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = "" }) : temp;
+                            s_d_b_list = s.verify_resource == true ? s_d_list.Where(x => x.item_type == "B").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = "" }) : temp;
+                            s_d_c_list = s.verify_living == true ? s_d_list.Where(x => x.item_type == "C").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = "" }) : temp;
+                            s_d_d_list = s.verify_activity == true ? s_d_list.Where(x => x.item_type == "D").Select(x => new { item_desc = x.item_desc, item_file = x.item_file, item_Authfile = "" }) : temp;
+                        }
+
+
+                        return Json(new { success = true, data_inf = s_inf, data_detailA = s_d_a_list.ToList(), data_detailB = s_d_b_list, data_detailC = s_d_c_list, data_detailD = s_d_d_list, school_address_area= s_address_area_list });
+                    }
+                    return Json(new { success = true, data_inf = s_inf, data_detailA = "", data_detailB = "", data_detailC = "", data_detailD = "", school_address_area = s_address_area_list });
+                }
+                else
+                {
+                    return Json(new { success = false, data_inf = "", data_detailA = "", data_detailB = "", data_detailC = "", data_detailD = "", errMsg = "無此筆資料或該大學尚未開放資料" });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, data = "", errMsg = ex.Message });
+            }
+
+
+        }
+        #region 儲存比較清單
+        /// <summary>
+        /// 比較清單點選比較後，比較之項目存入資料庫
+        /// </summary>
+        /// <param name="type">A 學群 B 學類 C 學系</param>
+        /// <param name="compareId">比較ID</param>
+        public void saveCompare(string type, string[] compareId)
+        {
+            string userId = _currentUser == null ? "guest" : _currentUser.UserId;
+            if (compareId != null && compareId.Count() >= 2)
+            {
+                Array.Sort(compareId);
+                compare compare = new compare() { id = userId, type = type, create_time = DateTime.Now, compare_1 = "", compare_2 = "", compare_3 = "" };
+                for (int i = 0; i < compareId.Count(); i++)
+                {
+                    //學群、學類補齊4碼，SQL like 不會出錯
+                    if (type == "A" || type == "B") { compareId[i] = compareId[i].PadLeft(4, '0'); }
+
+                    if (i == 0) { compare.compare_1 = compareId[i]; }
+                    else if (i == 1) { compare.compare_2 = compareId[i]; }
+                    else if (i == 2) { compare.compare_3 = compareId[i]; }
+                }
+                db.compares.Add(compare);
+                db.SaveChanges();
+            }
+        }
+        #endregion
+    }
+}
